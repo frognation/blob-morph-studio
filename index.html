@@ -135,6 +135,28 @@
                     <button class="toggle-btn active" id="outlineToggle">OUTLINE</button>
                     <button class="toggle-btn" id="particlesToggle">DOTS</button>
                 </div>
+
+                <!-- Fill opacity -->
+                <div class="control-row">
+                    <span class="ctrl-label">FILL ALPHA</span>
+                    <input type="range" id="fillOpacitySlider" min="0" max="100" value="28" class="slider">
+                    <span class="ctrl-value" id="fillOpacityVal">28%</span>
+                </div>
+
+                <!-- Stroke style -->
+                <div style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);margin-top:2px">STROKE STYLE</div>
+                <div class="toggle-row">
+                    <button class="toggle-btn stroke-style-btn active" data-style="normal">NORMAL</button>
+                    <button class="toggle-btn stroke-style-btn" data-style="chain">CHAIN</button>
+                    <button class="toggle-btn stroke-style-btn" data-style="dashed">DASHED</button>
+                </div>
+
+                <!-- Chain width (only shown when CHAIN selected) -->
+                <div class="control-row" id="chainWidthRow" style="display:none">
+                    <span class="ctrl-label">CHAIN WIDTH</span>
+                    <input type="range" id="chainWidthSlider" min="4" max="40" value="14" class="slider">
+                    <span class="ctrl-value" id="chainWidthVal">14px</span>
+                </div>
             </div>
         </section>
 

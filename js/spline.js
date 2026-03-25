@@ -136,6 +136,124 @@ function downsamplePath(pts, targetCount) {
     return result;
 }
 
+// ─── Chain / DNA-helix stroke effect ────────────────────────────────────────
+
+/**
+ * Compute smooth per-point normals for a path using central differencing.
+ * Returns an array of {x, y} unit normal vectors pointing "outward" (left of travel).
+ */
+function computePathNormals(path, closed) {
+    const n = path.length;
+    return path.map((_, i) => {
+        const prev = path[(i - 1 + n) % n];
+        const next = path[(i + 1) % n];
+        let tx = next.x - prev.x, ty = next.y - prev.y;
+        const len = Math.sqrt(tx * tx + ty * ty) || 1;
+        tx /= len; ty /= len;
+        return { x: -ty, y: tx }; // rotate 90° CCW = left normal
+    });
+}
+
+/**
+ * Draw the DNA-helix / chain lattice stroke effect.
+ *
+ * Renders two parallel strands offset from the spline path by chainWidth/2,
+ * connected at regular intervals by perpendicular rungs. Between consecutive
+ * rungs, two diagonal cross-links form an X — giving the chain-mail / DNA look.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Array<{x,y}>}  pts        — particle positions (control points)
+ * @param {boolean}       closed
+ * @param {string}        color      — stroke color
+ * @param {number}        chainWidth — distance between the two strands
+ * @param {number}        lineWidth  — stroke width of each line
+ */
+function drawChainStroke(ctx, pts, closed, color, chainWidth, lineWidth) {
+    if (!pts || pts.length < 3) return;
+    const path = buildSplinePath(pts, closed, 16);
+    const n = path.length;
+    if (n < 4) return;
+
+    const normals = computePathNormals(path, closed);
+    const half = chainWidth / 2;
+
+    // Two parallel offset strands
+    const sA = path.map((p, i) => ({ x: p.x + normals[i].x * half, y: p.y + normals[i].y * half }));
+    const sB = path.map((p, i) => ({ x: p.x - normals[i].x * half, y: p.y - normals[i].y * half }));
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = lineWidth;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+
+    // Draw strand A
+    ctx.beginPath();
+    ctx.moveTo(sA[0].x, sA[0].y);
+    for (let i = 1; i < n; i++) ctx.lineTo(sA[i].x, sA[i].y);
+    if (closed) ctx.closePath();
+    ctx.stroke();
+
+    // Draw strand B
+    ctx.beginPath();
+    ctx.moveTo(sB[0].x, sB[0].y);
+    for (let i = 1; i < n; i++) ctx.lineTo(sB[i].x, sB[i].y);
+    if (closed) ctx.closePath();
+    ctx.stroke();
+
+    // Collect rung indices at arc-length intervals ≈ chainWidth
+    const rungSpacing = chainWidth * 1.15;
+    let acc = 0;
+    const rungs = [0]; // always start with first point
+    for (let i = 1; i < n; i++) {
+        const dx = path[i].x - path[i - 1].x;
+        const dy = path[i].y - path[i - 1].y;
+        acc += Math.sqrt(dx * dx + dy * dy);
+        if (acc >= rungSpacing) {
+            rungs.push(i);
+            acc -= rungSpacing;
+        }
+    }
+
+    const rungCount = rungs.length;
+    const loopCount = closed ? rungCount : rungCount - 1;
+
+    ctx.lineWidth = lineWidth * 0.85;
+
+    for (let r = 0; r < loopCount; r++) {
+        const i = rungs[r];
+        const j = rungs[(r + 1) % rungCount];
+
+        // Perpendicular rung at i
+        ctx.beginPath();
+        ctx.moveTo(sA[i].x, sA[i].y);
+        ctx.lineTo(sB[i].x, sB[i].y);
+        ctx.stroke();
+
+        // Diagonal cross-link A→B (forward)
+        ctx.beginPath();
+        ctx.moveTo(sA[i].x, sA[i].y);
+        ctx.lineTo(sB[j].x, sB[j].y);
+        ctx.stroke();
+
+        // Diagonal cross-link B→A (backward) — forms the X
+        ctx.beginPath();
+        ctx.moveTo(sB[i].x, sB[i].y);
+        ctx.lineTo(sA[j].x, sA[j].y);
+        ctx.stroke();
+    }
+    // Final closing rung for open paths
+    if (!closed && rungs.length > 0) {
+        const last = rungs[rungs.length - 1];
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(sA[last].x, sA[last].y);
+        ctx.lineTo(sB[last].x, sB[last].y);
+        ctx.stroke();
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Convert hex color to rgba string with given alpha.
  */

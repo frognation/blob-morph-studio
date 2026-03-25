@@ -18,6 +18,9 @@ const state = {
     showFilled: true,
     showOutline: true,
     showDots: false,
+    strokeStyle: 'normal',   // 'normal' | 'chain' | 'dashed'
+    chainWidth: 14,
+    fillOpacity: 0.28,
     bgColor: '#0f0f1a',
     showGrid: true,
     animPlaying: true,
@@ -96,11 +99,42 @@ function renderChain(chain, isActive) {
     const pts = chain.particles;
     if (pts.length < 3) return;
 
-    const fillRgba  = hexToRgba(chain.color, chain.showFilled  ? 0.28 : 0);
-    const strokeClr = chain.showOutline ? chain.color : 'none';
+    const fillAlpha = chain.fillOpacity !== undefined ? chain.fillOpacity : 0.28;
+    const fillRgba  = chain.showFilled ? hexToRgba(chain.color, fillAlpha) : null;
 
-    drawSpline(ctx, pts, chain.closed, strokeClr, chain.lineWidth,
-               chain.showFilled ? fillRgba : null, chain.showFilled, chain.showOutline);
+    // Always draw fill first (behind stroke)
+    if (chain.showFilled) {
+        const path = buildSplinePath(pts, chain.closed, 14);
+        ctx.beginPath();
+        ctx.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+        if (chain.closed) ctx.closePath();
+        ctx.fillStyle = fillRgba;
+        ctx.fill();
+    }
+
+    // Draw stroke depending on style
+    if (chain.showOutline) {
+        if (chain.strokeStyle === 'chain') {
+            drawChainStroke(ctx, pts, chain.closed, chain.color, chain.chainWidth, chain.lineWidth);
+        } else if (chain.strokeStyle === 'dashed') {
+            const path = buildSplinePath(pts, chain.closed, 14);
+            ctx.beginPath();
+            ctx.moveTo(path[0].x, path[0].y);
+            for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            if (chain.closed) ctx.closePath();
+            ctx.strokeStyle = chain.color;
+            ctx.lineWidth = chain.lineWidth;
+            ctx.setLineDash([8, 6]);
+            ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.setLineDash([]);
+        } else {
+            // Normal stroke
+            drawSpline(ctx, pts, chain.closed, chain.color, chain.lineWidth,
+                       null, false, true);
+        }
+    }
 
     // Draw particles if selected or in dots mode
     if (chain.selected || state.showDots) {
@@ -212,10 +246,13 @@ canvas.addEventListener('mousedown', e => {
 
     if (state.tool === 'blob') {
         state.activeChain = new BlobChain();
-        state.activeChain.color = state.color;
-        state.activeChain.lineWidth = state.lineWidth;
+        state.activeChain.color       = state.color;
+        state.activeChain.lineWidth   = state.lineWidth;
         state.activeChain.showFilled  = state.showFilled;
         state.activeChain.showOutline = state.showOutline;
+        state.activeChain.strokeStyle = state.strokeStyle;
+        state.activeChain.chainWidth  = state.chainWidth;
+        state.activeChain.fillOpacity = state.fillOpacity;
         state.activeChain.addParticle(pos.x, pos.y);
         state.lastDrawX = pos.x; state.lastDrawY = pos.y;
 
@@ -373,9 +410,12 @@ function applyTextBlobs() {
     pushUndo();
     blobs.forEach((blob, i) => {
         const chain = pointsToChain(blob.points, ox, oy, state.color);
-        chain.lineWidth = state.lineWidth;
+        chain.lineWidth   = state.lineWidth;
         chain.showFilled  = state.showFilled;
         chain.showOutline = state.showOutline;
+        chain.strokeStyle = state.strokeStyle;
+        chain.chainWidth  = state.chainWidth;
+        chain.fillOpacity = state.fillOpacity;
         chain.label = `${text}[${i}]`;
         physics.addChain(chain);
     });
@@ -406,9 +446,12 @@ function handleImageImport(file) {
         pushUndo();
         blobs.forEach(blob => {
             const chain = pointsToChain(blob.points, ox, oy, state.color);
-            chain.lineWidth = state.lineWidth;
+            chain.lineWidth   = state.lineWidth;
             chain.showFilled  = state.showFilled;
             chain.showOutline = state.showOutline;
+            chain.strokeStyle = state.strokeStyle;
+            chain.chainWidth  = state.chainWidth;
+            chain.fillOpacity = state.fillOpacity;
             chain.label = file.name.split('.')[0];
             physics.addChain(chain);
         });
@@ -559,6 +602,33 @@ function initUI() {
     document.getElementById('particlesToggle').addEventListener('click', function() {
         state.showDots = !state.showDots;
         this.classList.toggle('active', state.showDots);
+    });
+
+    // Stroke style toggle buttons
+    document.querySelectorAll('.stroke-style-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            state.strokeStyle = btn.dataset.style;
+            document.querySelectorAll('.stroke-style-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            // Show/hide chain width control
+            const cwRow = document.getElementById('chainWidthRow');
+            if (cwRow) cwRow.style.display = state.strokeStyle === 'chain' ? '' : 'none';
+            if (state.selectedChain) state.selectedChain.strokeStyle = state.strokeStyle;
+        });
+    });
+
+    // Chain width slider
+    document.getElementById('chainWidthSlider')?.addEventListener('input', e => {
+        state.chainWidth = +e.target.value;
+        document.getElementById('chainWidthVal').textContent = e.target.value + 'px';
+        if (state.selectedChain) state.selectedChain.chainWidth = state.chainWidth;
+    });
+
+    // Fill opacity slider
+    document.getElementById('fillOpacitySlider')?.addEventListener('input', e => {
+        state.fillOpacity = +e.target.value / 100;
+        document.getElementById('fillOpacityVal').textContent = e.target.value + '%';
+        if (state.selectedChain) state.selectedChain.fillOpacity = state.fillOpacity;
     });
 
     // Physics sliders

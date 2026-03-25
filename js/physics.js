@@ -23,6 +23,9 @@ class BlobChain {
         this.lineWidth = 2;
         this.showFilled = true;
         this.showOutline = true;
+        this.strokeStyle = 'normal';  // 'normal' | 'chain' | 'dashed'
+        this.chainWidth = 14;         // width between the two chain strands
+        this.fillOpacity = 0.28;      // fill alpha (0–1)
         this.visible = true;
         this.selected = false;
         this.label = '';
